@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>好愛米</title>
+<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+<script type="text/javascript">
+function initialize() {
+    var mapOptions = {
+        zoom: 8,
+          center: new google.maps.LatLng(23, 120),
+          mapTypeId: google.maps.MapTypeId.ROADMAP
+    };
+
+    var map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
+
+    // ground overlay
+    //[118.12450137927,122.00668752744,21.896768815762,26.383821258048]
+
+    $(function(){
+    var countries = ["南投縣", "嘉義市", "嘉義縣", "基隆市", "宜蘭縣", "屏東縣", "彰化縣", "新北市", "新竹市", "新竹縣", "桃園縣", "澎湖縣", "臺中市", "臺北市", "臺南市", "臺東縣", "花蓮縣", "苗栗縣", "連江縣", "金門縣", "雲林縣", "高雄市"];
+    for (var i = 0; i < countries.length; i ++) {
+        (function(country){
+            $.get('outputs/boundry-' + country, function(ret){
+                var points = ret.split(',').map(parseFloat);
+                var boundaries = new google.maps.LatLngBounds(new google.maps.LatLng(points[2], points[0]), new google.maps.LatLng(points[3], points[1]));
+                var oldmap = new google.maps.GroundOverlay("outputs/" + country + ".png", boundaries, {opacity: 0.8});
+                oldmap.setMap(map);
+            }, 'text');
+        }(countries[i]));
+    }
+    });
+    map.setUIToDefault();
+}
+
+google.maps.event.addDomListener(window, 'load', initialize);
+</script>
+</head>
+<body>
+<div id="map_canvas" style="width: 800px; height: 600px"></div>
+</body>
+</html>
