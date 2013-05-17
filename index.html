@@ -146,6 +146,7 @@ function initialize() {
                 region_polygons[region_name].setMap(null);
             }
 
+            var choosed_boundary = null;
             // 顯示有被勾選的地段
             for (var region_name in show_regions) {
                 if (!region_polygons[region_name]) {
@@ -154,11 +155,25 @@ function initialize() {
                         continue;
                     }
                     var polygon_coords = [];
+                    var boundary = null;
                     for (var j = 0; j < region_data.geometry.coordinates[0].length; j ++) {
                         polygon_coords.push(new google.maps.LatLng(
-                                    region_data.geometry.coordinates[0][j][1],
-                                    region_data.geometry.coordinates[0][j][0]
+                            region_data.geometry.coordinates[0][j][1],
+                            region_data.geometry.coordinates[0][j][0]
                         ));
+                        if (null === boundary) {
+                            boundary = [
+                                region_data.geometry.coordinates[0][j][1],
+                                region_data.geometry.coordinates[0][j][1],
+                                region_data.geometry.coordinates[0][j][0],
+                                region_data.geometry.coordinates[0][j][0],
+                            ];
+                        } else {
+                            boundary[0] = Math.min(boundary[0], region_data.geometry.coordinates[0][j][1]);
+                            boundary[1] = Math.max(boundary[1], region_data.geometry.coordinates[0][j][1]);
+                            boundary[2] = Math.min(boundary[2], region_data.geometry.coordinates[0][j][0]);
+                            boundary[3] = Math.max(boundary[3], region_data.geometry.coordinates[0][j][0]);
+                        }
                     }
                     var polygon = new google.maps.Polygon({
                         paths: polygon_coords,
@@ -169,13 +184,27 @@ function initialize() {
                         fillOpacity: 0.35
                     });
                     polygon.region_name = region_name;
+                    polygon.boundry_info = boundary;
                     google.maps.event.addListener(polygon, "mousemove", polygon_mouseover);
 
                     region_polygons[region_name] = polygon;
                 }
 
+                polygon = region_polygons[region_name];
+                if (null === choosed_boundary) {
+                    choosed_boundary = polygon.boundry_info;
+                } else {
+                    choosed_boundary[0] = Math.min(choosed_boundary[0], polygon.boundry_info[0]);
+                    choosed_boundary[1] = Math.max(choosed_boundary[1], polygon.boundry_info[1]);
+                    choosed_boundary[2] = Math.min(choosed_boundary[2], polygon.boundry_info[2]);
+                    choosed_boundary[3] = Math.max(choosed_boundary[3], polygon.boundry_info[3]);
+                }
                 region_polygons[region_name].setMap(map);
             }
+            map.fitBounds(new google.maps.LatLngBounds(
+                new google.maps.LatLng(choosed_boundary[0], choosed_boundary[2]),
+                new google.maps.LatLng(choosed_boundary[1], choosed_boundary[3])
+            ))
         };
 
         $('#rice-trust-list').on('mouseover', 'li', function(){
