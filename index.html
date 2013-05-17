@@ -5,7 +5,92 @@
 <title>好愛米</title>
 <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
 <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.2.2/bootstrap.min.js"></script>
+<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.2.2/css/bootstrap.css">
 <script type="text/javascript">
+
+var income_maps = [];
+var region_rices = {};
+
+var show_region = function(region_name){
+    if ($('#content-body').data('id') == 'region-' + region_name) {
+        return;
+    }
+    $('#content-body').data('id', 'region-' + region_name);
+    $('#content-title').text(region_name);
+    var region_data = region_datas[region_name];
+    var data = {};
+    data['縣市'] = region_data.properties.country_name;
+    data['鄉鎮'] = region_data.properties.town_name;
+    var dl_dom = $('<dl></dl>');
+    for (var id in data) {
+        dl_dom.append($('<dt></dt>').text(id));
+        dl_dom.append($('<dd></dd>').text(('string' == typeof(data[id])) ? data[id] : JSON.stringify(data[id])));
+    }
+
+    dl_dom.append($('<dt></dt>').text('生產稻米'));
+
+    for (var id in region_rices[region_name]) {
+        var terms = id.split(';');
+        var trust_id = terms[0];
+        var id = terms[1];
+        var rice_data = trust_groups[trust_id].rice_datas[id];
+        dl_dom.append($('<dd></dd>').append(
+                    $('<a></a>')
+                    .addClass('product-link')
+                    .data('trust_id', trust_id)
+                    .data('id', id)
+                    .text(rice_data.ProductName + '-' + rice_data.PackDate)
+        ));
+    }
+    $('#content-body').html(dl_dom);
+};
+
+var show_rice_info = function(trust_id, id){
+    if ($('#content-body').data('id') == 'rice-list-' + trust_id + '-' + id ) {
+        return;
+    }
+    $('#content-body').data('id', 'rice-list-' + trust_id + '-' + id);
+
+    var rice_data = trust_groups[trust_id].rice_datas[id];
+    $('#content-title').text(rice_data.ProductName + '(' + rice_data.TraceCode + ')');
+    var dl_dom = $('<dl></dl>');
+    for (var id in rice_data) {
+        dl_dom.append($('<dt></dt>').text(id));
+        if (id == 'OperationDetail') {
+            var ul_dom = $('<ul></ul>');
+            for (var i = 0; i < rice_data[id].length; i ++) {
+                var tag = rice_data[id][i].OperationTag;
+                var li_dom = $('<li></li>');
+                li_dom.html(tag.OperationDate + '.' + tag.Operation);
+                if (tag.OperationMemo) {
+                    li_dom.append('(' + tag.OperationMemo + ')');
+                }
+                ul_dom.append(li_dom);
+            }
+            dl_dom.append($('<dd></dd>').html(ul_dom));
+        } else if (id == 'PlantRegion') {
+            var ul_dom = $('<ul></ul>');
+            var regions = rice_data.PlantRegion.split('，');
+            for (var j = 0; j < regions.length; j ++) {
+                var a_dom = $('<a></a>');
+                a_dom.text(regions[j])
+                    .addClass('region-link')
+                    .data('region', regions[j]);
+                ul_dom.append($('<li></li>').append(a_dom));
+            }
+            dl_dom.append($('<dd></dd>').html(ul_dom));
+        } else {
+            dl_dom.append($('<dd></dd>').text(('string' == typeof(rice_data[id])) ? rice_data[id] : JSON.stringify(rice_data[id])));
+        }
+    }
+    $('#content-body').html(dl_dom);
+};
+
+var polygon_mouseover = function(){
+    show_region(this.region_name);
+};
+
 function initialize() {
     var mapOptions = {
         zoom: 8,
@@ -19,25 +104,201 @@ function initialize() {
     //[118.12450137927,122.00668752744,21.896768815762,26.383821258048]
 
     $(function(){
-    var countries = ["南投縣", "嘉義市", "嘉義縣", "基隆市", "宜蘭縣", "屏東縣", "彰化縣", "新北市", "新竹市", "新竹縣", "桃園縣", "澎湖縣", "臺中市", "臺北市", "臺南市", "臺東縣", "花蓮縣", "苗栗縣", "連江縣", "金門縣", "雲林縣", "高雄市"];
-    for (var i = 0; i < countries.length; i ++) {
-        (function(country){
-            $.get('outputs/boundry-' + country, function(ret){
-                var points = ret.split(',').map(parseFloat);
-                var boundaries = new google.maps.LatLngBounds(new google.maps.LatLng(points[2], points[0]), new google.maps.LatLng(points[3], points[1]));
-                var oldmap = new google.maps.GroundOverlay("outputs/" + country + ".png", boundaries, {opacity: 0.8});
-                oldmap.setMap(map);
-            }, 'text');
-        }(countries[i]));
-    }
+        // 讀取各行政區的所得資料
+        var countries = ["南投縣", "嘉義市", "嘉義縣", "基隆市", "宜蘭縣", "屏東縣", "彰化縣", "新北市", "新竹市", "新竹縣", "桃園縣", "澎湖縣", "臺中市", "臺北市", "臺南市", "臺東縣", "花蓮縣", "苗栗縣", "連江縣", "金門縣", "雲林縣", "高雄市"];
+        for (var i = 0; i < countries.length; i ++) {
+            (function(country){
+                $.get('outputs/boundry-' + country, function(ret){
+                    var points = ret.split(',').map(parseFloat);
+                    var boundaries = new google.maps.LatLngBounds(new google.maps.LatLng(points[2], points[0]), new google.maps.LatLng(points[3], points[1]));
+                    var oldmap = new google.maps.GroundOverlay("outputs/" + country + ".png", boundaries, {opacity: 0.8});
+                    oldmap.setMap(map);
+                    income_maps.push(oldmap);
+                }, 'text');
+            }(countries[i]));
+        }
+
+
+        // 依照勾選的稻米顯示哪些地籍區塊
+        var refresh_farm_region = function(){
+            var show_regions = {};
+
+            $('#rice-trust-list input:checkbox:checked').each(function(){
+                var self = $(this);
+                var trust_id = self.data('trust_id');
+                var grouped_rice_datas = trust_groups[trust_id].rice_datas;
+                for (var i = 0; i < grouped_rice_datas.length; i ++) {
+                    var rice_data = grouped_rice_datas[i];
+
+                    var regions = rice_data.PlantRegion.split('，');
+                    for (var j = 0; j < regions.length; j ++) {
+                        if (!region_rices[regions[j]]) {
+                            region_rices[regions[j]] = {};
+                        }
+                        region_rices[regions[j]][trust_id + ';' + i] = true;
+                        show_regions[regions[j]] = true;
+                    }
+                }
+            });
+
+            // 先把所有地段的圖不要顯示
+            for (var region_name in region_polygons) {
+                region_polygons[region_name].setMap(null);
+            }
+
+            // 顯示有被勾選的地段
+            for (var region_name in show_regions) {
+                if (!region_polygons[region_name]) {
+                    var region_data = region_datas[region_name];
+                    if (!region_data) {
+                        continue;
+                    }
+                    var polygon_coords = [];
+                    for (var j = 0; j < region_data.geometry.coordinates[0].length; j ++) {
+                        polygon_coords.push(new google.maps.LatLng(
+                                    region_data.geometry.coordinates[0][j][1],
+                                    region_data.geometry.coordinates[0][j][0]
+                        ));
+                    }
+                    var polygon = new google.maps.Polygon({
+                        paths: polygon_coords,
+                        strokeColor: "#0000FF",
+                        strokeOpacity: 0.8,
+                        strokeWeight: 2,
+                        fillColor: "#0000FF",
+                        fillOpacity: 0.35
+                    });
+                    polygon.region_name = region_name;
+                    google.maps.event.addListener(polygon, "mousemove", polygon_mouseover);
+
+                    region_polygons[region_name] = polygon;
+                }
+
+                region_polygons[region_name].setMap(map);
+            }
+        };
+
+        $('#rice-trust-list').on('mouseover', 'li', function(){
+            if ($('#rice-list').data('trust_id') == $(this).data('trust_id')) {
+                return;
+            }
+            var trust_id = $(this).data('trust_id');
+            $('#rice-list-title').text($(this).data('product_name'));
+            $('#rice-list').empty();
+            for (var i = 0; i < trust_groups[trust_id].rice_datas.length; i ++ ){
+                $('#rice-list').append(
+                    $('<li></li>').text(trust_groups[trust_id].rice_datas[i].PackDate).data('trust_id', trust_id).data('id', i)
+                );
+            }
+            $('#rice-list').data('trust_id', $(this).data('trust_id'));
+        });
+
+        $('#rice-list').on('mouseover', 'li', function(){
+            show_rice_info($(this).data('trust_id'), $(this).data('id'));
+        });
+
+        $('#content-body').on('click', '.region-link', function(e){
+            e.preventDefault();
+            show_region($(this).data('region'));
+        });
+        $('#content-body').on('click', '.product-link', function(e){
+            e.preventDefault();
+            show_rice_info($(this).data('trust_id'), $(this).data('id'));
+        });
+
+        $('#rice-trust-list').on('change', 'input:checkbox', function(){
+            refresh_farm_region();
+        });
+
+        $('#income-checkbox').change(function(){
+                for (var i = 0; i < income_maps.length; i ++) {
+                    if ($(this).is(':checked')) {
+                        income_maps[i].setMap(map);
+                    } else {
+                        income_maps[i].setMap(null);
+                    }
+                }
+        });
     });
-    map.setUIToDefault();
+
+    refresh_list = function(){
+        $('#rice-trust-list').empty();
+        trust_groups = {};
+        for (var i = 0; i < rice_datas.length; i ++) {
+            var rice_data = rice_datas[i];
+
+            if (!trust_groups[rice_data.ProductName]) {
+                trust_groups[rice_data.ProductName] = $('<li></li>')
+                    .data('trust_id', rice_data.ProductName)
+                    .data('product_name', rice_data.ProductName)
+                    .append(
+                            $('<label></label>')
+                            .text(rice_data.ProductName)
+                            .prepend($('<input type="checkbox">').data('trust_id', rice_data.ProductName).addClass('rice_trust_group'))
+                    )
+                    ;
+                trust_groups[rice_data.ProductName].rice_datas = [];
+            }
+
+            trust_groups[rice_data.ProductName].rice_datas.push(rice_data);
+        }
+
+        for (var i in trust_groups) {
+            $('#rice-trust-list').append(trust_groups[i]);
+        }
+    };
+
+    $.get('data/rice.json', function(rows){
+        rice_datas = rows;
+        refresh_list();
+    },'json');
+
+    $.get('outputs/section.json', function(ret_sections){
+        region_datas = {};
+        for (var i = 0; i < ret_sections.length; i ++) {
+            region_datas[ret_sections[i][0]] = ret_sections[i][1];
+        }
+    }, 'json');
+
 }
+var rice_datas;
+var trust_groups = {};
+var region_datas = {};
+var region_polygons = {};
 
 google.maps.event.addDomListener(window, 'load', initialize);
 </script>
 </head>
 <body>
-<div id="map_canvas" style="width: 800px; height: 600px"></div>
+<div class="container-fluid">
+    <div class="row-fluid">
+        <div class="span8">
+            <div class="row-fluid">
+                <div class="span4">
+                    <label>
+                        <input type="checkbox" id="income-checkbox" checked="checked">顯示收入地圖
+                    </label>
+                    <label>
+                        <input type="checkbox" id="pollute-checkbox">顯示汙染地圖
+                    </label>
+                </div>
+                <div class="span4" style="height: 150px; overflow: scroll">
+                    <ul id="rice-trust-list"></ul>
+                </div>
+                <div class="span4" style="height: 150px; overflow: scroll">
+                    <h4 id="rice-list-title"></h4>
+                    <ul id="rice-list"></ul>
+                </div>
+            </div>
+            <div class="row-fluid">
+                <div id="map_canvas" class="span12" style="height: 600px"></div>
+            </div>
+        </div>
+        <div class="span4" style="height: 750px; overflow: scroll">
+            <h4 id="content-title"></h4>
+            <div id="content-body"></div>
+        </div>
+    </div>
+</div>
 </body>
 </html>
