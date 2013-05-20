@@ -188,6 +188,11 @@ function initialize() {
             show_rice_info($(this).data('trust_id'), $(this).data('id'));
         });
 
+        $('#rice-trust-list-selectall').change(function(){
+            $('#rice-trust-list input:checkbox').prop('checked', $(this).is(':checked'));
+            refresh_farm_region();
+        });
+
         $('#content-body').on('click', '.region-link', function(e){
             e.preventDefault();
             show_region($(this).data('region'));
@@ -314,6 +319,8 @@ google.maps.event.addDomListener(window, 'load', initialize);
                     </label>
                 </div>
                 <div class="span4" style="height: 150px; overflow: scroll">
+                    <h4 id="rice-trust-list-title">選擇稻米種類</h4>
+                    <label><input type="checkbox" id="rice-trust-list-selectall">全選</label>
                     <ul id="rice-trust-list"></ul>
                 </div>
                 <div class="span4" style="height: 150px; overflow: scroll">
