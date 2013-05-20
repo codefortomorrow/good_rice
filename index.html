@@ -12,6 +12,27 @@
 var income_maps = [];
 var region_rices = {};
 
+var show_soil = function(soil_id){
+    if ($('#content-body').data('id') == 'soil-' + soil_id) {
+        return;
+    }
+    $('#content-body').data('id', 'soil-' + soil_id);
+    var data = soil_datas[soil_id].properties;
+
+    $('#content-title').text('土壤檢測點: ' + soil_id);
+    var dl_dom = $('<dl></dl>');
+    for (var id in data) {
+        dl_dom.append($('<dt></dt>').text(id));
+        if (id.match('_VALUE$') && soil_meter[id.split('_')[0]] && soil_meter[id.split('_')[0]] < data[id]) {
+            dl_dom.append($('<dd></dd>').html('<strong>' + data[id] + '</strong>(建議值: ' + soil_meter[id.split('_')[0]] + ')'));
+        } else {
+            dl_dom.append($('<dd></dd>').text(('string' == typeof(data[id])) ? data[id] : JSON.stringify(data[id])));
+        }
+    }
+
+    $('#content-body').html(dl_dom);
+};
+
 var show_region = function(region_name){
     if ($('#content-body').data('id') == 'region-' + region_name) {
         return;
@@ -89,6 +110,10 @@ var show_rice_info = function(trust_id, id){
 
 var polygon_mouseover = function(){
     show_region(this.region_name);
+};
+
+var marker_mouseover = function(){
+    show_soil(this.marker_id);
 };
 
 function initialize() {
@@ -193,10 +218,31 @@ function initialize() {
             refresh_farm_region();
         });
 
+        $('#soil-minus').click(function(e){
+            e.preventDefault();
+            var radius = parseInt($('#soil-radius').attr('data-radius'), 10);
+            if (radius > 1) {
+                radius --;
+                $('#soil-radius').attr('data-radius', radius);
+            }
+            $('#soil-radius').text(radius + 'km');
+            refresh_soil();
+        });
+
+        $('#soil-add').click(function(e){
+            e.preventDefault();
+            var radius = parseInt($('#soil-radius').attr('data-radius'), 10);
+            radius ++;
+            $('#soil-radius').attr('data-radius', radius);
+            $('#soil-radius').text(radius + 'km');
+            refresh_soil();
+        });
+
         $('#content-body').on('click', '.region-link', function(e){
             e.preventDefault();
             show_region($(this).data('region'));
         });
+
         $('#content-body').on('click', '.product-link', function(e){
             e.preventDefault();
             show_rice_info($(this).data('trust_id'), $(this).data('id'));
@@ -215,7 +261,18 @@ function initialize() {
                     }
                 }
         });
+
+        $('#soil-checkbox').change(function(){
+            refresh_soil();
+        });
     });
+
+    refresh_soil = function(){
+        for (var i = 0; i < soil_datas.length; i ++) {
+            soil_datas[i].marker.setMap($('#soil-checkbox').is(':checked') ? map : null);
+            soil_datas[i].marker.setRadius(parseInt($('#soil-radius').attr('data-radius')) * 1000);
+        }
+    };
 
     refresh_list = function(){
         $('#rice-trust-list').empty();
@@ -296,11 +353,50 @@ function initialize() {
         }
     }, 'json');
 
+    $.get('data/soil-20080701.json', function(ret){
+        soil_datas = [];
+        for (var i = 0; i < ret.features.length; i ++) {
+            var feature = ret.features[i];
+            if (feature.properties['POLL_LEVEL'] == '正常') {
+                continue;
+            }
+            over_meter = false;
+            for (var id in soil_meter) {
+                if (feature.properties[id + '_VALUE'] > soil_meter[id]) {
+                    over_meter = true;
+                    break;
+                }
+            }
+            if (!over_meter) {
+                continue;
+            }
+            soil_datas.push(feature);
+            var marker = new google.maps.Circle({
+                center: new google.maps.LatLng(feature.geometry.coordinates[1], feature.geometry.coordinates[0]),
+                radius: 10000
+            });
+            marker.marker_id = soil_datas.length - 1;
+            marker.setMap(map);
+            google.maps.event.addListener(marker, "mousemove", marker_mouseover);
+            soil_datas[soil_datas.length - 1].marker = marker;
+        }
+    }, 'json');
 }
 var rice_datas;
+var soil_datas = [];
 var trust_groups = {};
 var region_datas = {};
 var region_polygons = {};
+var soil_meter = {
+    AS: 16.0,
+    CD: 0.6,
+    CR: 15.0,
+    CU: 60.0,
+    HG: 0.6,
+    NI: 25.0,
+    PB: 40.0,
+    ZN: 40.0
+};
 
 google.maps.event.addDomListener(window, 'load', initialize);
 </script>
@@ -315,8 +411,16 @@ google.maps.event.addDomListener(window, 'load', initialize);
                         <input type="checkbox" id="income-checkbox" checked="checked">顯示收入地圖
                     </label>
                     <label>
-                        <input type="checkbox" id="pollute-checkbox">顯示汙染地圖
+                        <input type="checkbox" id="soil-checkbox">顯示汙染地圖
                     </label>
+                    <div class="pagination">
+                        <ul>
+                            <li><a href="#" id="soil-minus">-</a></li>
+                            <li><a href="#" id="soil-radius" data-radius="10">10km</a></li>
+                            <li><a href="#" id="soil-add">+</a></li>
+                        </ul>
+                    </div>
+
                 </div>
                 <div class="span4" style="height: 150px; overflow: scroll">
                     <h4 id="rice-trust-list-title">選擇稻米種類</h4>
